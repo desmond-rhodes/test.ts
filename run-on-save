@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+
+silent='true'
+
+ts_flags='--alwaysStrict --strictBindCallApply --strictFunctionTypes --target ES2024 --module nodenext'
+js_flags='--harmony'
+
+relative_path() {
+	[ ! -z "${2}" ] && realpath --relative-to="${2}" "${1}" || echo "${1}"
+}
+
+ext_del() { echo "${1}" | sed 's/\.[^.]*$//'; }
+
+ext_get() { echo "${1}" | sed -n 's/^.*\.\([^.]*\)$/\1/p'; }
+
+boolean() { eval "${1}" && echo 'true' || echo 'false'; }
+
+dispatch_count=0;
+
+dispatch_make() {
+	(( ${dispatch_count} > 0 )) && printf '\n'
+	dispatch_count=$(( ${dispatch_count} + 1 ))
+	[ "${silent}" = 'true' ] \
+		&& printf '+ tsc ... %s\n\n' "${1}" \
+		|| printf '+ tsc %s %s\n\n' "${2}" "${1}"
+	tsc ${2} "${1}"
+}
+
+dispatch_execute() {
+	(( ${dispatch_count} > 0 )) && printf '\n'
+	dispatch_count=$(( ${dispatch_count} + 1 ))
+	[ "${silent}" = 'true' ] \
+		&& printf '+ node ... %s\n\n' "${1}" \
+		|| printf '+ node %s %s\n\n' "${2}" "${1}"
+	node ${2} "${1}"
+}
+
+dispatch_build() {
+	local is_test
+
+	base=$(ext_del "${1}")
+	is_test=$(boolean '[ ! -z `ext_get "${base}" | grep "test"` ]')
+
+	if [ "${is_test}" = 'false' -a -e "${base}.test.ts" ]; then
+		base="${base}.test"
+		is_test='true'
+	fi
+
+	dispatch_make "${base}.ts" "${ts_flags}"
+	run="${base}.js"
+	has_test=$(boolean '[ ! -z `grep -om1 "node:test" "${base}.js"` ]')
+}
+
+dispatch_run() {
+	if [ "${2}" = 'true' ]; then
+		dispatch_execute "${1}" "${js_flags} --test"
+	else
+		dispatch_execute "${1}" "${js_flags}"
+	fi
+}
+
+session_time() { date '+%Y/%m/%d %H:%M:%S'; }
+
+session_start() { printf 'START [%s]\n\n' "$(session_time)"; }
+
+session_finish() { printf '\nFINISH [%s]\n\n' "$(session_time)"; }
+
+build_run() {
+	run=''
+	has_test=''
+	time dispatch_build "${1}"
+	printf '\n'
+	time dispatch_run "${run}" "${has_test}"
+}
+
+file=$(relative_path "${1}" "${2}")
+session_start
+set -e
+trap session_finish 0
+build_run "${file}"

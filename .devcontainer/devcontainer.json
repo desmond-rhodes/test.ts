@@ -1,0 +1,12 @@
+{
+	"build": {
+		"dockerfile": "typescript/Dockerfile"
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"emeraldwalk.RunOnSave"
+			]
+		}
+	}
+}
